@@ -15,6 +15,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
+
 @RestController
 public class ProductController {
 
@@ -30,22 +33,37 @@ public class ProductController {
 
     @GetMapping("/products")
     public ResponseEntity<List<ProductModel>> getAllProducts() {
-        return ResponseEntity.status(HttpStatus.OK).body(productRepository.findAll());
+        List<ProductModel> productsList = productRepository.findAll();
+
+        if (!productsList.isEmpty()) {
+            for (ProductModel product : productsList) {
+                UUID id = product.getId();
+                product.add(linkTo(methodOn(ProductController.class).getOneProduct(id)).withSelfRel());
+            }
+        }
+
+        return ResponseEntity.status(HttpStatus.OK).body(productsList);
     }
 
     @GetMapping("/products/{id}")
-    public  ResponseEntity<Object> getOneProduct(@PathVariable(value="id") UUID id) {
+    public ResponseEntity<Object> getOneProduct(@PathVariable(value = "id") UUID id) {
         Optional<ProductModel> product = productRepository.findById(id);
 
-        return product.
-                <ResponseEntity<Object>>map(productModel ->
-                ResponseEntity.status(HttpStatus.OK).body(productModel)).orElseGet(() ->
-                ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Product not found")));
+        if (product.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Product not found"));
+        }
+
+        ProductModel productModel = product.get();
+        productModel.add(linkTo(methodOn(ProductController.class).getAllProducts()).withRel("All Products"));
+
+        return ResponseEntity.status(HttpStatus.OK).body(productModel);
     }
 
     @PutMapping("/products/{id}")
     public ResponseEntity<Object> updateProduct(@PathVariable(value="id") UUID id,
                                                 @RequestBody @Valid ProductRecordDto productRecordDto) {
+        
         Optional<ProductModel> product = productRepository.findById(id);
 
         if (product.isPresent()) {
